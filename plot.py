@@ -29,14 +29,16 @@ def plot_roc_curve(model, dataloader, device="cpu", title="ROC Curve"):
     all_probs = []
 
     with torch.no_grad():
-        for inputs, labels in dataloader:
+        for batch in dataloader:
+            inputs, labels = batch
+
             inputs = inputs.to(device)
             labels = labels.to(device)
 
             outputs = model(inputs)
 
             # Handle binary and multi-class
-            if outputs.shape[1] == 1:
+            if len(outputs) == 1:
                 probs = torch.sigmoid(outputs).squeeze()
             else:
                 probs = torch.softmax(outputs, dim=1)[:, 1]  # class 1 probability
@@ -44,8 +46,8 @@ def plot_roc_curve(model, dataloader, device="cpu", title="ROC Curve"):
             all_probs.append(probs.cpu().numpy())
             all_labels.append(labels.cpu().numpy())
 
-    y_true = np.concatenate(all_labels)
-    y_scores = np.concatenate(all_probs)
+    y_true = all_labels
+    y_scores = all_probs
 
     fpr, tpr, _ = roc_curve(y_true, y_scores)
     roc_auc = auc(fpr, tpr)

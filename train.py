@@ -147,7 +147,8 @@ def train_model(
         lr: float = 1e-3,
         weight_decay: float | None = 1e-5,
         Loss=torch.nn.BCELoss,
-        device='cpu'):
+        device='cpu',
+        epochs: int = 40):
     if features == None:
         X = df.drop(columns=output).to_numpy()
     else:
@@ -184,7 +185,7 @@ def train_model(
     val_dataloader = DataLoader(test_data, batch_size=len(y_test), shuffle=True)
 
     # We instantiate our model
-    model = MLP(X.shape[1], [6, 6], 1).to(device)
+    model = MLP(X.shape[1], [4], 1).to(device)
 
     # define your optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0 if weight_decay == None else weight_decay)
@@ -194,8 +195,7 @@ def train_model(
     val_loss_curve = []
     train_loss_curve = []
 
-    EPOCHS = 40
-    for epoch in range(EPOCHS):
+    for epoch in range(epochs):
         # Compute train your model on training data
         epoch_loss = train(model, train_dataloader, optimizer, device, criterion)
 
@@ -214,4 +214,4 @@ def train_model(
         print(string)
 
     plot_losses(val_loss_curve, train_loss_curve, EPOCHS)
-    plot_roc_curve(model, X_test, y_test, title='Sepsis Prediction Model')
+    plot_roc_curve(model, test_data, device="cpu", title='EpiPen ROC Curve')

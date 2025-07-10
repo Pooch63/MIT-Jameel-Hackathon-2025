@@ -17,4 +17,4 @@ if __name__ == '__main__':
 
     print("Dataframe loaded successfully")
     if TRAIN:
-        train_model(dataframe, output='Flag_EpiPen', device='cpu')
+        train_model(dataframe, output='Flag_EpiPen', device='cpu', epochs=40)
