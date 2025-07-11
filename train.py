@@ -1,7 +1,6 @@
 import pandas as pd
 import torch
 import torch.nn as nn
-import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score
@@ -11,8 +10,6 @@ from torch.utils.data import DataLoader, TensorDataset
 from plot import plot_losses, plot_roc_curve, plot_multiclass_roc, plot_metrics
 from tqdm import tqdm
 
-
-########### Code #############
 def train(model, dataloader, optimizer, device, criterion):
 
     '''
@@ -132,10 +129,8 @@ def train_loop(model, train_dataloader, val_dataloader, optimizer, device: str, 
         print('\n' + string)
 
     return val_loss_curve, train_loss_curve, other_metrics
-########### Code #############
 
 # Define the Neural Network model for sepsis prediction
-
 class MLP(nn.Module): #In python, we can make something called a "Class". We will encapsulate all our model in here !
   # Type can equal 'bc' for binary classification, 'mc' for multi-class classification, or
   # 'regression' for regression tasks.
@@ -217,7 +212,7 @@ def train_model(
         elif features < 5:
             hidden_layer_sizes = [features + 1]
         else:
-            num = features // 2
+            num = len(features) // 2
             while num > max(2, output_dim):
                 hidden_layer_sizes.append(num)
                 num //= 2
@@ -274,7 +269,7 @@ def train_model(
     plot_losses(val_loss_curve, train_loss_curve, epochs, save_path = f"{save_folder}/{output}_loss_curve.png" if save_folder else None)
     if output_type == 'bc':
         plot_roc_curve(model, test_data, device=device, title='EpiPen ROC Curve', save_path=f"{save_folder}/{output}_roc_curve.png" if save_folder else None)
-    else:
+    elif output_type == 'mc':
         plot_multiclass_roc(model, val_dataloader, len(y_series.unique()), device=device, title='Allergen Type ROC Curve', save_path=f"{save_folder}/{output}_roc_curve.png" if save_folder else None)
 
     # Print final metrics
