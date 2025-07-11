@@ -68,23 +68,24 @@ def process_allergy(column: pd.Series) -> pd.Series:
     Process the 'allergy' column to convert allergy types to integers.
     """
     return process_classification(column, {
-        'Other': 1,
-        'TreeNut': 2,
-        'Egg': 3,
-        'Shellfish': 4,
-        'Soybean': 5,
-        'Fish': 6,
-        'Peanut': 7,
+        'Other': 0,
+        'TreeNut': 1,
+        'Egg': 2,
+        'Shellfish': 3,
+        'Soybean': 4,
+        'Fish': 5,
+        'Peanut': 6,
     }).fillna(0)
 def process_visit_type(column: pd.Series) -> pd.Series:
     """
     Process the 'visit_type' column to convert visit types to integers.
     """
     return process_classification(column, {
-        'ER': 0,
-        'Inpatient': 1,
-        'Outpatient': 2,
-    }).fillna(5)
+        'None': 0,
+        'ER': 1,
+        'Inpatient': 2,
+        'Outpatient': 3,
+    }).fillna(0)
 def process_visit_level(column: pd.Series) -> pd.Series:
     """
     Process the 'visit_level' column to convert visit levels to integers.

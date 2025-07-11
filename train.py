@@ -4,11 +4,11 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import classification_report, accuracy_score, precision_score, recall_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score
 import numpy as np
 from collections import defaultdict
 from torch.utils.data import DataLoader, TensorDataset
-from plot import plot_losses, plot_roc_curve, plot_metrics
+from plot import plot_losses, plot_roc_curve, plot_multiclass_roc, plot_metrics
 from tqdm import tqdm
 
 
@@ -52,7 +52,7 @@ def train(model, dataloader, optimizer, device, criterion):
 
     return np.array(epoch_loss).mean()
 
-def validate(model, dataloader, device, criterion, sensitivity=0.5):
+def validate(model, dataloader, device, criterion, type: str, sensitivity=0.5):
     '''
     A function validate on the validation dataset for one epoch .
 
@@ -75,13 +75,20 @@ def validate(model, dataloader, device, criterion, sensitivity=0.5):
             X, y = batch
             X = X.to(device)
             y = y.to(device)
+
             # validate your model on each batch here
             outputs = model(X)
-            outputs = outputs.squeeze()
+            if type != 'mc':
+                outputs = outputs.squeeze()
+            
             loss = criterion(outputs, y)# fill in loss here
             val_loss.append(loss.item())
 
-            preds = outputs > sensitivity
+            if type == 'mc':
+                preds = torch.argmax(outputs, dim=1)
+            else:
+                preds = outputs > sensitivity
+
             all_pred.append(preds)
             all_true.append(y)
 
@@ -89,8 +96,8 @@ def validate(model, dataloader, device, criterion, sensitivity=0.5):
     all_true = np.hstack(all_true)
 
     acc = accuracy_score(all_pred, all_true)
-    precision = precision_score(all_pred, all_true)
-    sensitivity = recall_score(all_pred, all_true)
+    precision = precision_score(all_pred, all_true, average=('binary' if type == 'bc' else 'macro'))
+    sensitivity = recall_score(all_pred, all_true, average=('binary' if type == 'bc' else 'macro'))
 
     metrics = {
         "accuracy": acc,
@@ -106,7 +113,10 @@ def validate(model, dataloader, device, criterion, sensitivity=0.5):
 class MLP(nn.Module): #In python, we can make something called a "Class". We will encapsulate all our model in here !
   # Type can equal 'bc' for binary classification, 'mc' for multi-class classification, or
   # 'regression' for regression tasks.
-  def __init__(self, input_size, inner_layers, output_size, dropout_rate: float = 0.2, type = 'bc'):
+  def __init__(self,
+               input_size, inner_layers, output_size,
+               dropout_rate: float = 0.2, type = 'bc',
+               leaky_relu_negative_slope: float = 0.01):
       super().__init__()
 
       # Here is where we define the neural network and the layers !
@@ -129,7 +139,7 @@ class MLP(nn.Module): #In python, we can make something called a "Class". We wil
         # Use Sigmoid for output layer (since it's a classification task)
         # and ReLU for everything else
         if index < len(sizes) - 1:
-          layers.append(torch.nn.ReLU())
+          layers.append(torch.nn.LeakyReLU(negative_slope=leaky_relu_negative_slope))
         else:
           if type == 'bc': layers.append(torch.nn.Sigmoid())
           elif type == 'mc': layers.append(torch.nn.Softmax(dim=1))
@@ -150,15 +160,42 @@ def train_model(
         validation_size: float = 0.2,
         lr: float = 1e-3,
         weight_decay: float | None = 1e-5,
-        Loss=torch.nn.BCELoss,
+        Loss=None,
         device='cpu',
         epochs: int = 40,
-        save_folder: str | None = None):
+        save_folder: str | None = None,
+        # bc or mc or regression
+        output_type: str = 'bc',
+        hidden_layer_sizes: list[int] | None = None):
+    if Loss == None:
+        if output_type == 'bc':
+            Loss = nn.BCELoss
+        elif output_type == 'mc':
+            Loss = nn.CrossEntropyLoss
+        else:
+            Loss = nn.MSELoss
+
     if features == None:
         X = df.drop(columns=output).to_numpy()
     else:
         X = df[features].to_numpy()
-    y = df[output].to_numpy()
+    y_series = df[output]
+    y = y_series.to_numpy()
+    output_dim = 1 if output_type == 'bc' else len(y_series.unique())
+
+    if hidden_layer_sizes == None:
+        hidden_layer_sizes = []
+        features = X.shape[1]
+        if features < 2:
+            hidden_layer_sizes = [2]
+        elif features < 5:
+            hidden_layer_sizes = [features + 1]
+        else:
+            num = features // 2
+            while num > max(2, output_dim):
+                hidden_layer_sizes.append(num)
+                num //= 2
+        print(f"Hidden layer sizes: {hidden_layer_sizes}")
 
     print(f"X shape: {X.shape}, Y shape: {y.shape}")
 
@@ -180,8 +217,12 @@ def train_model(
     X_train = torch.tensor(X_train, dtype=torch.float32)
     X_test = torch.tensor(X_test, dtype=torch.float32)
 
-    y_train = torch.tensor(y_train, dtype=torch.float32)
-    y_test = torch.tensor(y_test, dtype=torch.float32)
+    if output_type == 'mc':
+        y_train = torch.tensor(y_train, dtype=torch.long)
+        y_test = torch.tensor(y_test, dtype=torch.long)
+    elif output_type == 'bc':
+        y_train = torch.tensor(y_train, dtype=torch.float32)
+        y_test = torch.tensor(y_test, dtype=torch.float32)
 
     train_data = TensorDataset(X_train, y_train) # Here we load our data into a Pytorch Dataset, which is just a way to bundle the features with their corresponding labels
     test_data = TensorDataset(X_test, y_test)
@@ -189,8 +230,10 @@ def train_model(
     train_dataloader = DataLoader(train_data, batch_size=25, shuffle=True) # We also use something called a "DataLoader" -- this is useful for feeding our data in batches into the model instead of all at once.
     val_dataloader = DataLoader(test_data, batch_size=len(y_test), shuffle=True)
 
+    print(output_dim)
+    print(y_series.unique())
     # We instantiate our model
-    model = MLP(X.shape[1], [6, 6], 1).to(device)
+    model = MLP(X.shape[1], hidden_layer_sizes, output_dim, type=output_type).to(device)
 
     # define your optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0 if weight_decay == None else weight_decay)
@@ -206,7 +249,7 @@ def train_model(
         epoch_loss = train(model, train_dataloader, optimizer, device, criterion)
 
         # Validate your on validation data
-        val_loss, metrics = validate(model, val_dataloader, device, criterion)
+        val_loss, metrics = validate(model, val_dataloader, device, criterion, type=output_type)
 
         # Record train and loss performance
         train_loss_curve.append(epoch_loss)
@@ -218,12 +261,15 @@ def train_model(
             string = string + f", {name:<11} = {round(metric,3):<5}"
             other_metrics[name].append(metric)
 
-        print(string)
+        print('\n' + string)
 
-    plot_losses(val_loss_curve, train_loss_curve, epochs, save_path = f"{save_folder}/loss_curve.png" if save_folder else None)
-    plot_roc_curve(model, test_data, device=device, title='EpiPen ROC Curve', save_path=f"{save_folder}/roc_curve.png" if save_folder else None)
+    plot_losses(val_loss_curve, train_loss_curve, epochs, save_path = f"{save_folder}/{output}_loss_curve.png" if save_folder else None)
+    if output_type == 'bc':
+        plot_roc_curve(model, test_data, device=device, title='EpiPen ROC Curve', save_path=f"{save_folder}/{output}_roc_curve.png" if save_folder else None)
+    else:
+        plot_multiclass_roc(model, val_dataloader, len(y_series.unique()), device=device, title='Allergen Type ROC Curve', save_path=f"{save_folder}/{output}_roc_curve.png" if save_folder else None)
 
     # Print final metrics
-    plot_metrics(other_metrics, save_path=f"{save_folder}/metrics.png" if save_folder else None)
+    plot_metrics(other_metrics, save_path=f"{save_folder}/{output}_metrics.png" if save_folder else None)
 
     return model

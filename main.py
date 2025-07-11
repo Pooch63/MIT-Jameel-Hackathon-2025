@@ -8,6 +8,11 @@ PROCESS = False
 TRAIN = True
 ANALYZE = False
 
+def train_epipen(dataframe: pd.DataFrame):
+    return train_model(dataframe, output='Flag_EpiPen', device='cpu', epochs=100, save_folder='model_output')
+def train_allergen_type(dataframe: pd.DataFrame):
+    return train_model(dataframe, output='Allergen_Type', epochs=3, device='cpu', output_type='mc')
+
 if __name__ == '__main__':
     dataframe = None
     if PROCESS:
@@ -20,7 +25,7 @@ if __name__ == '__main__':
 
     print("Dataframe loaded successfully")
     if TRAIN:
-        train_model(dataframe, output='Flag_EpiPen', device='cpu', epochs=100, save_folder='model_output')
+        train_allergen_type(dataframe)
     if ANALYZE:
         cols = dataframe.columns
         for index in tqdm(range(len(cols)), desc="Analyzing columns"):

@@ -1,7 +1,9 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import torch
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_auc_score, roc_curve, auc
+from sklearn.preprocessing import label_binarize
+import numpy as np
 
 def plot_losses(val_loss_curve: list[int], train_loss_curve: list[int], epochs: int, save_path: str | None = None):
     plt.plot([i for i in range(0, epochs)], train_loss_curve, label='Train Loss')
@@ -71,6 +73,64 @@ def plot_roc_curve(model, dataloader, device="cpu", title="ROC Curve", save_path
         plt.savefig(save_path, bbox_inches='tight')
 
     plt.show()
+def plot_multiclass_roc(model, dataloader, num_classes, device='cpu', title="ROC Curve", save_path=None):
+    """
+    Plots multiclass ROC curves given a model and dataloader.
+
+    Args:
+        model: Trained PyTorch model
+        dataloader: DataLoader with (X, y) batches
+        num_classes: Number of target classes
+        device: 'cpu' or 'cuda'
+        title: Title for the plot
+        save_path: Optional path to save the figure
+    """
+    model.to(device)
+    model.eval()
+
+    all_probs = []
+    all_true = []
+
+    with torch.no_grad():
+        for batch in dataloader:
+            X = batch[0]
+            y = batch[1]
+            X = X.to(device)
+            y = y.to(device)
+
+            print(X, X.shape, y, y.shape)
+            outputs = model(X)
+            print(outputs.shape)
+
+            # Apply softmax if not already applied in the model
+            probs = torch.nn.functional.softmax(outputs, dim=1)
+
+            all_probs.append(probs)
+            all_true.append(y)
+
+    all_probs = torch.cat(all_probs).cpu().numpy()
+    all_true = torch.cat(all_true).cpu().numpy()
+
+    # One-hot encode true labels
+    y_true_bin = label_binarize(all_true, classes=np.arange(num_classes))
+
+    # Plot ROC curves for each class
+    plt.figure(figsize=(10, 7))
+    for i in range(num_classes):
+        fpr, tpr, _ = roc_curve(y_true_bin[:, i], all_probs[:, i])
+        auc = roc_auc_score(y_true_bin[:, i], all_probs[:, i])
+        plt.plot(fpr, tpr, label=f"Class {i} (AUC = {auc:.2f})")
+
+    plt.plot([0, 1], [0, 1], 'k--', label="Random")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title(title)
+    plt.legend(loc="lower right")
+
+    if save_path:
+        plt.savefig(save_path)
+    else:
+        plt.show()
 
 def plot_metrics(metrics, save_path: str | None = None):
     legends = []
