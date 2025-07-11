@@ -73,7 +73,7 @@ def plot_roc_curve(model, dataloader, device="cpu", title="ROC Curve", save_path
         plt.savefig(save_path, bbox_inches='tight')
 
     plt.show()
-def plot_multiclass_roc(model, dataloader, num_classes, device='cpu', title="ROC Curve", save_path=None):
+def plot_multiclass_roc(model, dataloader, num_classes, device='cpu', title="ROC Curve", save_path: str | None =None):
     """
     Plots multiclass ROC curves given a model and dataloader.
 
@@ -98,9 +98,7 @@ def plot_multiclass_roc(model, dataloader, num_classes, device='cpu', title="ROC
             X = X.to(device)
             y = y.to(device)
 
-            print(X, X.shape, y, y.shape)
             outputs = model(X)
-            print(outputs.shape)
 
             # Apply softmax if not already applied in the model
             probs = torch.nn.functional.softmax(outputs, dim=1)
@@ -125,10 +123,10 @@ def plot_multiclass_roc(model, dataloader, num_classes, device='cpu', title="ROC
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
     plt.title(title)
-    plt.legend(loc="lower right")
+    plt.legend([], loc="lower right")
 
     if save_path:
-        plt.savefig(save_path)
+        plt.savefig(save_path, bbox_inches='tight', dpi=300)
     else:
         plt.show()
 
@@ -165,4 +163,4 @@ def plot_pd_series_describe(series: pd.Series, save_path: str | None = None, tit
     if save_path:
         plt.savefig(save_path, bbox_inches='tight', dpi=40)
 
-    # plt.show()
+    plt.show()

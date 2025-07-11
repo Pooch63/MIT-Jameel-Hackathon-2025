@@ -1,4 +1,5 @@
 import pandas as pd
+from tqdm import tqdm
 
 # Suppress the darn SettingWithCopyWarning
 pd.options.mode.chained_assignment = None  # default='warn'
@@ -196,12 +197,14 @@ def process_dataframe(dataframe: pd.DataFrame, remove=True) -> pd.DataFrame:
     last_widths = dataframe['Visit1_Weight_lb'].copy()
     last_heights = dataframe['Visit1_Height_in'].copy()
     last_ages = dataframe['Visit1_Age'].copy()
-    for i in range(2, 10 + 1):
+
+    iterative = tqdm(range(2, 10 + 1), desc="Filling heights and weights")
+    for i in iterative:
         weight_col = dataframe[f'Visit{i}_Weight_lb']
         height_col = dataframe[f'Visit{i}_Height_in']
         ages_col = dataframe[f'Visit{i}_Age']
         
-        for j, row in dataframe.iterrows():
+        for j in tqdm(range(0, len(dataframe)), desc="Filling heights and weights"):
             if pd.isnull(weight_col[j]):
                 weight_col[j] = last_widths[j]
             else:
@@ -216,8 +219,6 @@ def process_dataframe(dataframe: pd.DataFrame, remove=True) -> pd.DataFrame:
                 ages_col[j] = last_ages[j]
             else:
                 last_ages[j] = ages_col[j]
-
-        print(f"{((i - 1) * 100 / 9):<2}% done with filling heights and weights")
 
     numbers, flags, objects = analyze_dataframe(dataframe, log=False)
     # Fill in missing values for numerical columns with the mean

@@ -3,15 +3,19 @@ from process import process_dataframe
 from train import train_model
 from plot import plot_pd_series_describe
 from tqdm import tqdm
+import sys
 
-PROCESS = False
-TRAIN = True
-ANALYZE = False
+args = sys.argv[1:]
+
+PROCESS = 'process' in args
+TRAIN = 'train' in args
+ANALYZE = 'analyze' in args
 
 def train_epipen(dataframe: pd.DataFrame):
-    return train_model(dataframe, output='Flag_EpiPen', device='cpu', epochs=100, save_folder='model_output')
+    return train_model(dataframe, output='Flag_EpiPen', device='cpu', epochs=20, save_folder='model_output')
 def train_allergen_type(dataframe: pd.DataFrame):
-    return train_model(dataframe, output='Allergen_Type', epochs=3, device='cpu', output_type='mc')
+    return train_model(dataframe, output='Allergen_Type', epochs=200, device='cpu', output_type='mc', save_folder='model_output',
+                       hidden_layer_sizes=[64, 32, 32])
 
 if __name__ == '__main__':
     dataframe = None
@@ -25,7 +29,10 @@ if __name__ == '__main__':
 
     print("Dataframe loaded successfully")
     if TRAIN:
-        train_allergen_type(dataframe)
+        if '--epipen-model' in args:
+            train_epipen(dataframe)
+        elif '--allergen-type-model' in args:
+            train_allergen_type(dataframe)
     if ANALYZE:
         cols = dataframe.columns
         for index in tqdm(range(len(cols)), desc="Analyzing columns"):

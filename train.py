@@ -106,6 +106,32 @@ def validate(model, dataloader, device, criterion, type: str, sensitivity=0.5):
     }
 
     return np.array(val_loss).mean(), metrics
+
+def train_loop(model, train_dataloader, val_dataloader, optimizer, device: str, criterion, epochs: int, output_type: str):
+    val_loss_curve = []
+    train_loss_curve = []
+    other_metrics = defaultdict(list)
+
+    for epoch in tqdm(range(epochs), desc="Training Epochs"):
+        # Compute train your model on training data
+        epoch_loss = train(model, train_dataloader, optimizer, device, criterion)
+
+        # Validate your on validation data
+        val_loss, metrics = validate(model, val_dataloader, device, criterion, type=output_type)
+
+        # Record train and loss performance
+        train_loss_curve.append(epoch_loss)
+        val_loss_curve.append(val_loss)
+
+        # Pretty print metrics for this epoch
+        string = f"Epoch = {(epoch + 1) :<2}, loss = {round(epoch_loss,5) :<8}, val_loss = {round(val_loss,5) :<8}"
+        for name, metric in metrics.items():
+            string = string + f", {name:<11} = {round(metric,3):<5}"
+            other_metrics[name].append(metric)
+
+        print('\n' + string)
+
+    return val_loss_curve, train_loss_curve, other_metrics
 ########### Code #############
 
 # Define the Neural Network model for sepsis prediction
@@ -137,15 +163,14 @@ class MLP(nn.Module): #In python, we can make something called a "Class". We wil
       for index in range(1, len(sizes)):
         layers.append(torch.nn.Linear(sizes[index - 1], sizes[index]))
         # Use Sigmoid for output layer (since it's a classification task)
-        # and ReLU for everything else
+        # and LeakyReLU for everything else
         if index < len(sizes) - 1:
           layers.append(torch.nn.LeakyReLU(negative_slope=leaky_relu_negative_slope))
         else:
           if type == 'bc': layers.append(torch.nn.Sigmoid())
           elif type == 'mc': layers.append(torch.nn.Softmax(dim=1))
           else: layers.append(torch.nn.ReLU())  # For regression tasks
-      print(layers)
-      #### ANSWER HERE #####
+          
       self.model = torch.nn.Sequential(*layers)
 
   def forward(self, x):
@@ -164,9 +189,10 @@ def train_model(
         device='cpu',
         epochs: int = 40,
         save_folder: str | None = None,
-        # bc or mc or regression
+        # bc, mc or regression
         output_type: str = 'bc',
-        hidden_layer_sizes: list[int] | None = None):
+        hidden_layer_sizes: list[int] | str | None = None,
+        random_state: int | None = None):
     if Loss == None:
         if output_type == 'bc':
             Loss = nn.BCELoss
@@ -195,11 +221,11 @@ def train_model(
             while num > max(2, output_dim):
                 hidden_layer_sizes.append(num)
                 num //= 2
-        print(f"Hidden layer sizes: {hidden_layer_sizes}")
+            print(f"Hidden layer sizes: {hidden_layer_sizes}")
 
     print(f"X shape: {X.shape}, Y shape: {y.shape}")
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=validation_size)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=validation_size, random_state=random_state)
 
     scaler = StandardScaler()
 
@@ -211,6 +237,10 @@ def train_model(
     # record those values, then create a value
     # do for accuracy
     # create a confusion matrix
+
+    if random_state != None:
+        torch.manual_seed(random_state)
+        np.random.seed(random_state)
 
     # Use Float32's because there is 0 need for super-precise decimals, and our values are well within
     # float range
@@ -230,8 +260,6 @@ def train_model(
     train_dataloader = DataLoader(train_data, batch_size=25, shuffle=True) # We also use something called a "DataLoader" -- this is useful for feeding our data in batches into the model instead of all at once.
     val_dataloader = DataLoader(test_data, batch_size=len(y_test), shuffle=True)
 
-    print(output_dim)
-    print(y_series.unique())
     # We instantiate our model
     model = MLP(X.shape[1], hidden_layer_sizes, output_dim, type=output_type).to(device)
 
@@ -240,28 +268,8 @@ def train_model(
     # Here we define our loss function L.
     criterion = Loss()
 
-    val_loss_curve = []
-    train_loss_curve = []
-    other_metrics = defaultdict(list)
-
-    for epoch in tqdm(range(epochs), desc="Training Epochs"):
-        # Compute train your model on training data
-        epoch_loss = train(model, train_dataloader, optimizer, device, criterion)
-
-        # Validate your on validation data
-        val_loss, metrics = validate(model, val_dataloader, device, criterion, type=output_type)
-
-        # Record train and loss performance
-        train_loss_curve.append(epoch_loss)
-        val_loss_curve.append(val_loss)
-
-        # Pretty print metrics for this epoch
-        string = f"Epoch = {(epoch + 1) :<2}, loss = {round(epoch_loss,5) :<8}, val_loss = {round(val_loss,5) :<8}"
-        for name, metric in metrics.items():
-            string = string + f", {name:<11} = {round(metric,3):<5}"
-            other_metrics[name].append(metric)
-
-        print('\n' + string)
+    val_loss_curve, train_loss_curve, other_metrics = train_loop(
+        model, train_dataloader, val_dataloader, optimizer, device, criterion, epochs, output_type)
 
     plot_losses(val_loss_curve, train_loss_curve, epochs, save_path = f"{save_folder}/{output}_loss_curve.png" if save_folder else None)
     if output_type == 'bc':
@@ -271,5 +279,6 @@ def train_model(
 
     # Print final metrics
     plot_metrics(other_metrics, save_path=f"{save_folder}/{output}_metrics.png" if save_folder else None)
+    print(other_metrics)
 
     return model
