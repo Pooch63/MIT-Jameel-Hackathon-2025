@@ -8,7 +8,8 @@ from sklearn.metrics import classification_report, accuracy_score, precision_sco
 import numpy as np
 from collections import defaultdict
 from torch.utils.data import DataLoader, TensorDataset
-from plot import plot_losses, plot_roc_curve
+from plot import plot_losses, plot_roc_curve, plot_metrics
+from tqdm import tqdm
 
 
 ########### Code #############
@@ -52,7 +53,6 @@ def train(model, dataloader, optimizer, device, criterion):
     return np.array(epoch_loss).mean()
 
 def validate(model, dataloader, device, criterion, sensitivity=0.5):
-
     '''
     A function validate on the validation dataset for one epoch .
 
@@ -104,7 +104,9 @@ def validate(model, dataloader, device, criterion, sensitivity=0.5):
 # Define the Neural Network model for sepsis prediction
 
 class MLP(nn.Module): #In python, we can make something called a "Class". We will encapsulate all our model in here !
-  def __init__(self, input_size, inner_layers, output_size, dropout_rate: float = 0.2):
+  # Type can equal 'bc' for binary classification, 'mc' for multi-class classification, or
+  # 'regression' for regression tasks.
+  def __init__(self, input_size, inner_layers, output_size, dropout_rate: float = 0.2, type = 'bc'):
       super().__init__()
 
       # Here is where we define the neural network and the layers !
@@ -129,7 +131,9 @@ class MLP(nn.Module): #In python, we can make something called a "Class". We wil
         if index < len(sizes) - 1:
           layers.append(torch.nn.ReLU())
         else:
-          layers.append(torch.nn.Sigmoid())
+          if type == 'bc': layers.append(torch.nn.Sigmoid())
+          elif type == 'mc': layers.append(torch.nn.Softmax(dim=1))
+          else: layers.append(torch.nn.ReLU())  # For regression tasks
       print(layers)
       #### ANSWER HERE #####
       self.model = torch.nn.Sequential(*layers)
@@ -148,7 +152,8 @@ def train_model(
         weight_decay: float | None = 1e-5,
         Loss=torch.nn.BCELoss,
         device='cpu',
-        epochs: int = 40):
+        epochs: int = 40,
+        save_folder: str | None = None):
     if features == None:
         X = df.drop(columns=output).to_numpy()
     else:
@@ -185,7 +190,7 @@ def train_model(
     val_dataloader = DataLoader(test_data, batch_size=len(y_test), shuffle=True)
 
     # We instantiate our model
-    model = MLP(X.shape[1], [4], 1).to(device)
+    model = MLP(X.shape[1], [6, 6], 1).to(device)
 
     # define your optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0 if weight_decay == None else weight_decay)
@@ -194,8 +199,9 @@ def train_model(
 
     val_loss_curve = []
     train_loss_curve = []
+    other_metrics = defaultdict(list)
 
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs), desc="Training Epochs"):
         # Compute train your model on training data
         epoch_loss = train(model, train_dataloader, optimizer, device, criterion)
 
@@ -210,8 +216,14 @@ def train_model(
         string = f"Epoch = {(epoch + 1) :<2}, loss = {round(epoch_loss,5) :<8}, val_loss = {round(val_loss,5) :<8}"
         for name, metric in metrics.items():
             string = string + f", {name:<11} = {round(metric,3):<5}"
+            other_metrics[name].append(metric)
 
         print(string)
 
-    plot_losses(val_loss_curve, train_loss_curve, EPOCHS)
-    plot_roc_curve(model, test_data, device="cpu", title='EpiPen ROC Curve')
+    plot_losses(val_loss_curve, train_loss_curve, epochs, save_path = f"{save_folder}/loss_curve.png" if save_folder else None)
+    plot_roc_curve(model, test_data, device=device, title='EpiPen ROC Curve', save_path=f"{save_folder}/roc_curve.png" if save_folder else None)
+
+    # Print final metrics
+    plot_metrics(other_metrics, save_path=f"{save_folder}/metrics.png" if save_folder else None)
+
+    return model

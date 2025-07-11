@@ -1,18 +1,22 @@
 import matplotlib.pyplot as plt
-import numpy as np
+import pandas as pd
 import torch
 from sklearn.metrics import roc_curve, auc
 
-def plot_losses(val_loss_curve: list[int], train_loss_curve: list[int], EPOCHS: int):
-    plt.plot([i for i in range(0, EPOCHS)], train_loss_curve, label='Train Loss')
-    plt.plot([i for i in range(0, EPOCHS)], val_loss_curve, label='Value Loss')
+def plot_losses(val_loss_curve: list[int], train_loss_curve: list[int], epochs: int, save_path: str | None = None):
+    plt.plot([i for i in range(0, epochs)], train_loss_curve, label='Train Loss')
+    plt.plot([i for i in range(0, epochs)], val_loss_curve, label='Value Loss')
     
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.legend()
+
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+
     plt.show()
 
-def plot_roc_curve(model, dataloader, device="cpu", title="ROC Curve"):
+def plot_roc_curve(model, dataloader, device="cpu", title="ROC Curve", save_path: str | None = None):
     """
     Plots ROC curve and prints AUC for a PyTorch model.
 
@@ -62,12 +66,43 @@ def plot_roc_curve(model, dataloader, device="cpu", title="ROC Curve"):
     plt.title(title)
     plt.legend(loc="lower right")
     plt.grid(alpha=0.3)
+
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+
     plt.show()
 
-def plot_metrics(metrics):
+def plot_metrics(metrics, save_path: str | None = None):
     legends = []
     for k, v in metrics.items():
         plt.plot(v)
         legends.append(k)
     plt.xlabel("Epoch")
     plt.legend(legends)
+
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+    plt.show()
+
+def plot_pd_series_describe(series: pd.Series, save_path: str | None = None, title: str = "Pandas Series Describe Output"):
+    """
+    Plots a pandas Series describe output as a bar chart.
+    
+    Args:
+        series: Pandas Series to plot.
+        save_path: Path to save the plot image.
+    """
+    desc = series.describe()
+
+    # The number of rows far outnumbers any metric of the dataset, so remove the count
+    desc = desc.drop('count', errors='ignore')
+
+    plt.bar(desc.index, desc.values)
+    plt.xlabel("Statistics")
+    plt.ylabel("Values")
+    plt.title(title)
+
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', dpi=40)
+
+    # plt.show()
