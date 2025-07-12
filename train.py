@@ -154,23 +154,24 @@ class MLP(nn.Module): #In python, we can make something called a "Class". We wil
       #### ANSWER HERE #####
       sizes = [input_size, *inner_layers, output_size]
       
-      layers = []
+      self.layers = []
       for index in range(1, len(sizes)):
-        layers.append(torch.nn.Linear(sizes[index - 1], sizes[index]))
+        self.layers.append(torch.nn.Linear(sizes[index - 1], sizes[index]))
         # Use Sigmoid for output layer (since it's a classification task)
         # and LeakyReLU for everything else
         if index < len(sizes) - 1:
-          layers.append(torch.nn.LeakyReLU(negative_slope=leaky_relu_negative_slope))
+          self.layers.append(torch.nn.LeakyReLU(negative_slope=leaky_relu_negative_slope))
         else:
-          if type == 'bc': layers.append(torch.nn.Sigmoid())
-          elif type == 'mc': layers.append(torch.nn.Softmax(dim=1))
-          else: layers.append(torch.nn.ReLU())  # For regression tasks
+          if type == 'bc': self.layers.append(torch.nn.Sigmoid())
+          elif type == 'mc': self.layers.append(torch.nn.Softmax(dim=1))
+          else: self.layers.append(torch.nn.ReLU())  # For regression tasks
           
-      self.model = torch.nn.Sequential(*layers)
+      self.model = torch.nn.Sequential(*self.layers)
 
   def forward(self, x):
         x = self.dropout(x)
         out = self.model(x)
+        
         return out
 
 def train_model(
@@ -187,7 +188,8 @@ def train_model(
         # bc, mc or regression
         output_type: str = 'bc',
         hidden_layer_sizes: list[int] | str | None = None,
-        random_state: int | None = None):
+        random_state: int | None = None,
+        batch_size: int = 25):
     if Loss == None:
         if output_type == 'bc':
             Loss = nn.BCELoss
@@ -252,7 +254,7 @@ def train_model(
     train_data = TensorDataset(X_train, y_train) # Here we load our data into a Pytorch Dataset, which is just a way to bundle the features with their corresponding labels
     test_data = TensorDataset(X_test, y_test)
 
-    train_dataloader = DataLoader(train_data, batch_size=25, shuffle=True) # We also use something called a "DataLoader" -- this is useful for feeding our data in batches into the model instead of all at once.
+    train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True) # We also use something called a "DataLoader" -- this is useful for feeding our data in batches into the model instead of all at once.
     val_dataloader = DataLoader(test_data, batch_size=len(y_test), shuffle=True)
 
     # We instantiate our model
@@ -277,3 +279,4 @@ def train_model(
     print(other_metrics)
 
     return model
+

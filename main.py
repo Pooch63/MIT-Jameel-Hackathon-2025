@@ -15,7 +15,7 @@ def train_epipen(dataframe: pd.DataFrame):
     return train_model(dataframe, output='Flag_EpiPen', device='cpu', epochs=20, save_folder='model_output')
 def train_allergen_type(dataframe: pd.DataFrame):
     return train_model(dataframe, output='Allergen_Type', epochs=200, device='cpu', output_type='mc', save_folder='model_output',
-                       hidden_layer_sizes=[64, 32, 32])
+                       hidden_layer_sizes=[512, 256, 128, 64, 32], batch_size=64)
 
 if __name__ == '__main__':
     dataframe = None
